@@ -10584,6 +10584,11 @@ const mouseUpEvent = evt => {
   if (evt.button === 2) {
     return;
   }
+  // 删除所选
+  if (svgCanvas$9.getCurrentResizeMode() === 'se') {
+    svgCanvas$9.deleteSelectedElements();
+    svgCanvas$9.setStarted(true);
+  }
   if (!svgCanvas$9.getStarted()) {
     return;
   }
@@ -11107,6 +11112,11 @@ const mouseDownEvent = evt => {
       break;
     case 'resize':
       {
+        // 如果是delete图标，则setStarted(false)
+        if (svgCanvas$9.getCurrentResizeMode() === 'se') {
+          svgCanvas$9.setStarted(false);
+          break;
+        }
         svgCanvas$9.setStarted(true);
         svgCanvas$9.setStartX(x);
         svgCanvas$9.setStartY(y);
@@ -40224,18 +40234,19 @@ const convertGradientsMethod = elem => {
 let svgCanvas$1;
 let selectorManager_; // A Singleton
 // change radius if touch screen
-const gripRadius = window.ontouchstart ? 10 : 4;
+const gripRadius = window.ontouchstart ? 10 : 8;
 const selectButtons = {
   se: {
     cursor: 'pointer',
-    icon: '../img/delete.svg',
-    size: 20
-  },
-  sw: {
-    cursor: 'pointer',
-    icon: '../img/reset.svg',
-    size: 20
+    icon: 'delete.svg',
+    size: 20,
+    name: 'delete'
   }
+  // sw: {
+  //   cursor: 'pointer',
+  //   icon: '../img/reset.svg',
+  //   size: 20
+  // },
 };
 /**
 * Private class for DOM element selection boxes.
@@ -40496,7 +40507,7 @@ class Selector {
       steps--;
     }
     Object.values(selectorManager_.selectorGrips).forEach((gripElement, i) => {
-      if (Object.keys(selectButtons).includes(dirArr[i])) {
+      if (Object.values(selectButtons).map(v => v.name).includes(gripElement.getAttribute('name'))) {
         gripElement.setAttribute('style', 'cursor:' + selectButtons[dirArr[i]].cursor);
         return;
       }
@@ -40581,7 +40592,8 @@ class SelectorManager {
         grip = this.createIconSelector({
           dir,
           size: selectButtons[dir]?.size || 20,
-          href: selectButtons[dir].icon
+          href: svgCanvas$1.curConfig.imgPath + selectButtons[dir].icon,
+          name: selectButtons[dir].name
         });
       } else {
         grip = svgCanvas$1.createSVGElement({
@@ -40665,7 +40677,8 @@ class SelectorManager {
   createIconSelector({
     dir,
     size,
-    href
+    href,
+    name
   }) {
     return svgCanvas$1.createSVGElement({
       element: 'image',
@@ -40680,7 +40693,8 @@ class SelectorManager {
         // This works in Opera and WebKit, but does not work in Firefox
         // see https://bugzilla.mozilla.org/show_bug.cgi?id=500174
         'stroke-width': 2,
-        'pointer-events': 'all'
+        'pointer-events': 'all',
+        name
       }
     });
   }

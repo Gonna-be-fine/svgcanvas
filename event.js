@@ -572,11 +572,6 @@ const mouseOutEvent = () => {
 const mouseUpEvent = (evt) => {
   moveSelectionThresholdReached = false
   if (evt.button === 2) { return }
-  // 删除所选
-  if(svgCanvas.getCurrentResizeMode() === 'se') {
-    svgCanvas.deleteSelectedElements()
-    svgCanvas.setStarted(true)
-  }
   if (!svgCanvas.getStarted()) { return }
 
   svgCanvas.textActions.init()
@@ -1107,11 +1102,6 @@ const mouseDownEvent = (evt) => {
       }, 100)
       break
     case 'resize': {
-      // 如果是delete图标，则setStarted(false)
-      if(svgCanvas.getCurrentResizeMode() === 'se'){
-        svgCanvas.setStarted(false)
-        break
-      }
       svgCanvas.setStarted(true)
       svgCanvas.setStartX(x)
       svgCanvas.setStartY(y)

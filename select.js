@@ -14,20 +14,8 @@ import { NS } from './namespaces'
 let svgCanvas
 let selectorManager_ // A Singleton
 // change radius if touch screen
-const gripRadius = window.ontouchstart ? 10 : 8
-const selectButtons = {
-  se: {
-    cursor: 'pointer',
-    icon: 'delete.svg',
-    size: 20,
-    name: 'delete'
-  },
-  // sw: {
-  //   cursor: 'pointer',
-  //   icon: '../img/reset.svg',
-  //   size: 20
-  // },
-}
+const gripRadius = window.ontouchstart ? 10 : 4
+
 /**
 * Private class for DOM element selection boxes.
 */
@@ -283,10 +271,6 @@ export class Selector {
       steps--
     }
     Object.values(selectorManager_.selectorGrips).forEach((gripElement, i) => {
-      if(Object.values(selectButtons).map(v => v.name).includes(gripElement.getAttribute('name'))){
-        gripElement.setAttribute('style', ('cursor:' + selectButtons[dirArr[i]].cursor))
-        return;
-      }
       gripElement.setAttribute('style', ('cursor:' + dirArr[i] + '-resize'))
     })
   }
@@ -362,13 +346,23 @@ export class SelectorManager {
     Object.keys(this.selectorGrips).forEach((dir) => {
       let grip = null;
       // 左侧
-
-      if(Object.keys(selectButtons).includes(dir)) {
+      if(['sw'].includes(dir)) {
         grip = this.createIconSelector({
           dir,
-          size: selectButtons[dir]?.size || 20,
-          href: svgCanvas.curConfig.imgPath + selectButtons[dir].icon,
-          name: selectButtons[dir].name
+          size: 20,
+          href: '../img/reset.svg',
+        })
+      }else if(['se'].includes(dir)) {
+        grip = this.createIconSelector({
+          dir,
+          size: 20,
+          href: '../img/delete.svg',
+        })
+      }else if(['nw'].includes(dir)) {
+        grip = this.createIconSelector({
+          dir,
+          size: 20,
+          href: '../img/scale.svg',
         })
       }else {
         grip = svgCanvas.createSVGElement({
@@ -454,7 +448,7 @@ export class SelectorManager {
   }
 
 
-  createIconSelector ({dir, size, href, name}) {
+  createIconSelector ({dir, size, href}) {
     return svgCanvas.createSVGElement({
       element: 'image',
       attr: {
@@ -468,8 +462,7 @@ export class SelectorManager {
         // This works in Opera and WebKit, but does not work in Firefox
         // see https://bugzilla.mozilla.org/show_bug.cgi?id=500174
         'stroke-width': 2,
-        'pointer-events': 'all',
-        name
+        'pointer-events': 'all'
       }
     });
   }
