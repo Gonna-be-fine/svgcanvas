@@ -1,0 +1,1 @@
+<svg viewBox="0 0 10 10" xmlns="http://www.w3.org/2000/svg" width="10" height="10">  <defs>    <pattern id="a" viewBox="0,0,10,10" width="10" height="10">      <rect width="10" height="10" />    </pattern>  </defs>  <rect width="10" height="10" fill="url(#a)" opacity="0.5" /></svg>
