@@ -868,7 +868,7 @@ const getTextMethod = () => {
 const setTextContentMethod = (val) => {
   svgCanvas.changeSelectedAttribute('#text', val)
   svgCanvas.textActions.init(val)
-  svgCanvas.textActions.setCursor()
+  // svgCanvas.textActions.setCursor()
 }
 
 /**

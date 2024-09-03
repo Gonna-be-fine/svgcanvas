@@ -51,6 +51,7 @@ export const textActionsMethod = (function () {
 * @returns {void}
 */
   function setCursor (index) {
+    return;
     const empty = (textinput.value === '')
     textinput.focus()
 
@@ -108,6 +109,7 @@ export const textActionsMethod = (function () {
 * @returns {void}
 */
   function setSelection (start, end, skipInput) {
+    return;
     if (start === end) {
       setCursor(end)
       return
