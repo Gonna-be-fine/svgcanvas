@@ -64,6 +64,40 @@ export const init = (canvas) => {
   svgCanvas.setColor = setColorMethod // Change the current stroke/fill color/gradien
   svgCanvas.setGradient = setGradientMethod // Apply the current gradient to selected element's fill or stroke.
   svgCanvas.setPaint = setPaintMethod // Set a color/gradient to a fill/stroke.
+  svgCanvas.diyAddText = diyAddText // 添加文字
+  svgCanvas.text2Path = text2Path // 文字转Path
+}
+
+const text2Path = (text) => {
+
+}
+
+/**
+* @function module:elem-get-set.SvgCanvas#diyAddText
+* @param {number} x
+* @param {number} y
+* @param {string} text
+*/
+const diyAddText = (x, y, text) => {
+  const newText = svgCanvas.addSVGElementsFromJson({
+    element: 'text',
+    curStyles: true,
+    attr: {
+      x,
+      y,
+      id: svgCanvas.getNextId(),
+      fill: svgCanvas.getCurText('fill'),
+      'stroke-width': svgCanvas.getCurText('stroke_width'),
+      'font-size': svgCanvas.getCurText('font_size'),
+      'font-family': svgCanvas.getCurText('font_family'),
+      'text-anchor': 'middle',
+      'xml:space': 'preserve',
+      opacity: 1
+    }
+  })
+  newText.textContent = text
+  svgCanvas.selectOnly([newText])
+  svgCanvas.selectorManager.requestSelector(svgCanvas.selectedElements[0]).showGrips(true)
 }
 
 /**

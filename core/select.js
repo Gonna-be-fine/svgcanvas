@@ -283,8 +283,9 @@ export class Selector {
       steps--
     }
     Object.values(selectorManager_.selectorGrips).forEach((gripElement, i) => {
-      if(Object.values(selectButtons).map(v => v.name).includes(gripElement.getAttribute('name'))){
-        gripElement.setAttribute('style', ('cursor:' + selectButtons[dirArr[i]].cursor))
+      let curGrip = Object.values(selectButtons).find(v => v.name === gripElement.getAttribute('name'))
+      if(curGrip){
+        gripElement.setAttribute('style', ('cursor:' + curGrip.cursor))
         return;
       }
       gripElement.setAttribute('style', ('cursor:' + dirArr[i] + '-resize'))

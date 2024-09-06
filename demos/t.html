@@ -1,0 +1,71 @@
+<!--
+ * @Author: chris.c Chris.C@frontop.cn
+ * @Date: 2024-09-05 17:30:41
+ * @LastEditors: chris.c Chris.C@frontop.cn
+ * @LastEditTime: 2024-09-06 17:00:50
+ * @FilePath: \svgcanvas\demos\t.html
+ * @Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
+-->
+<!--
+ * @Author: chris.c Chris.C@frontop.cn
+ * @Date: 2024-09-05 17:30:41
+ * @LastEditors: chris.c Chris.C@frontop.cn
+ * @LastEditTime: 2024-09-06 11:53:36
+ * @FilePath: \svgcanvas\demos\t.html
+ * @Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OpenType.js Text to Path</title>
+  <script src="./lib/opentype.min.js"></script>
+</head>
+<body>
+  <svg id="svg" width="500" height="200" xmlns="http://www.w3.org/2000/svg">
+    <!-- 路径将动态生成并插入到这里 -->
+  </svg>
+
+  <script>
+    // 加载自定义字体（注意需要使用字体的绝对或相对路径）
+    opentype.load('./Playfair_Display/PlayfairDisplay-Italic-VariableFont_wght.ttf', function(err, font) {
+      if (err) {
+        console.error('无法加载字体:', err);
+        return;
+      }
+
+      // 定义要转换为路径的文字、位置和大小
+      const text = 'helo';
+      const fontSize = 72;
+      const x = 50;
+      const y = 150;
+
+      const svgElement = document.getElementById('svg');
+
+      const createLayer = (text, fontSize, strokeWidth, color) => {
+        const path = font.getPath(text, x, y, fontSize);
+        const svgPathData = path.toPathData(5);
+
+        const pathElement = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        pathElement.setAttribute('d', svgPathData);
+        pathElement.setAttribute('fill', 'none');
+        pathElement.setAttribute('stroke', color);
+        pathElement.setAttribute('stroke-width', strokeWidth);
+
+        return pathElement;
+      };
+
+      // 依次创建每个层次的路径
+      const layers = 3;
+      const initialStrokeWidth = 2;
+      const colors = ['#FF5733', '#33FF57', '#3357FF', '#FF33A1', '#33FFA1']; // 可自定义颜色
+      for (let i = 1; i <= layers; i++) {
+        const layer = createLayer(text, fontSize + i * 5, initialStrokeWidth + i * 2, colors[i - 1]);
+        svgElement.appendChild(layer);
+      }
+
+    });
+  </script>
+</body>
+</html>

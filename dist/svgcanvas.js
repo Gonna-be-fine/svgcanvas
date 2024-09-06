@@ -11477,6 +11477,37 @@ const init$7 = canvas => {
   svgCanvas$7.setColor = setColorMethod; // Change the current stroke/fill color/gradien
   svgCanvas$7.setGradient = setGradientMethod; // Apply the current gradient to selected element's fill or stroke.
   svgCanvas$7.setPaint = setPaintMethod; // Set a color/gradient to a fill/stroke.
+  svgCanvas$7.diyAddText = diyAddText; // 添加文字
+  svgCanvas$7.text2Path = text2Path; // 文字转Path
+};
+const text2Path = text => {};
+
+/**
+* @function module:elem-get-set.SvgCanvas#diyAddText
+* @param {number} x
+* @param {number} y
+* @param {string} text
+*/
+const diyAddText = (x, y, text) => {
+  const newText = svgCanvas$7.addSVGElementsFromJson({
+    element: 'text',
+    curStyles: true,
+    attr: {
+      x,
+      y,
+      id: svgCanvas$7.getNextId(),
+      fill: svgCanvas$7.getCurText('fill'),
+      'stroke-width': svgCanvas$7.getCurText('stroke_width'),
+      'font-size': svgCanvas$7.getCurText('font_size'),
+      'font-family': svgCanvas$7.getCurText('font_family'),
+      'text-anchor': 'middle',
+      'xml:space': 'preserve',
+      opacity: 1
+    }
+  });
+  newText.textContent = text;
+  svgCanvas$7.selectOnly([newText]);
+  svgCanvas$7.selectorManager.requestSelector(svgCanvas$7.selectedElements[0]).showGrips(true);
 };
 
 /**
@@ -40415,8 +40446,9 @@ class Selector {
       steps--;
     }
     Object.values(selectorManager_.selectorGrips).forEach((gripElement, i) => {
-      if (Object.values(selectButtons).map(v => v.name).includes(gripElement.getAttribute('name'))) {
-        gripElement.setAttribute('style', 'cursor:' + selectButtons[dirArr[i]].cursor);
+      let curGrip = Object.values(selectButtons).find(v => v.name === gripElement.getAttribute('name'));
+      if (curGrip) {
+        gripElement.setAttribute('style', 'cursor:' + curGrip.cursor);
         return;
       }
       gripElement.setAttribute('style', 'cursor:' + dirArr[i] + '-resize');
