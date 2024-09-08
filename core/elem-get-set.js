@@ -15,6 +15,8 @@ import {
 } from './units.js'
 import { getParents } from '../common/util.js'
 
+import opentype from './lib/opentype.js';
+
 let svgCanvas = null
 
 /**
@@ -68,8 +70,51 @@ export const init = (canvas) => {
   svgCanvas.text2Path = text2Path // 文字转Path
 }
 
-const text2Path = (text) => {
+const text2Path = (text, x, y, id) => {
+  opentype.load('./fonts/NotoSansSC-VariableFont_wght.ttf', function(err, font) {
+    // opentype.load('./fonts/ShipporiAntiqueB1-Regular.ttf', function(err, font) {
+      if (err) {
+        console.error('无法加载字体:', err);
+        return;
+      }
 
+      // 定义要转换为路径的文字、位置和大小
+      const fontSize = svgCanvas.getFontSize()-5;
+
+      // 获取文字路径
+      const path = font.getPath(text, x, y, fontSize);
+      const svgPathData = path.toPathData(5); // 转换为 SVG 路径数据
+
+      // 获取 SVG 容器
+      const svgElement = svgCanvas.addSVGElementsFromJson({
+        element: 'g',
+        curStyles: true,
+        attr: {
+          id: id + 'text',
+          opacity: 1,
+          style: 'pointer-events:none',
+          class: 'noEvent',
+        }
+      })
+
+      // 定义每层的颜色和描边宽度
+      const layers = [
+        { color: '#0044cc', strokeWidth: 16 },  // 最外层的蓝色描边
+        { color: '#ffee00', strokeWidth: 12 },  // 中间的黄色描边
+        { color: '#000000', strokeWidth: 6 },  // 最里面的黑色描边
+      ];
+
+      // 逐层绘制描边
+      layers.forEach(layer => {
+        const outlineElement = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        outlineElement.setAttribute('d', svgPathData);
+        outlineElement.setAttribute('fill', 'none');
+        outlineElement.setAttribute('stroke', layer.color);
+        outlineElement.setAttribute('stroke-width', layer.strokeWidth);
+        outlineElement.setAttribute('stroke-linejoin', 'round');  // 圆滑的边角
+        svgElement.appendChild(outlineElement);
+      });
+    });
 }
 
 /**
@@ -92,12 +137,15 @@ const diyAddText = (x, y, text) => {
       'font-family': svgCanvas.getCurText('font_family'),
       'text-anchor': 'middle',
       'xml:space': 'preserve',
-      opacity: 1
+      opacity: 0
     }
   })
   newText.textContent = text
   svgCanvas.selectOnly([newText])
   svgCanvas.selectorManager.requestSelector(svgCanvas.selectedElements[0]).showGrips(true)
+
+  const tbox = newText.getBBox();
+  svgCanvas.text2Path(text, x-tbox.width/2, y, newText.id)
 }
 
 /**

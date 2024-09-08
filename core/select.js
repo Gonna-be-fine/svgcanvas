@@ -174,6 +174,13 @@ export class Selector {
     }
 
     if (bbox) {
+      if(svgCanvas.getSelectedElements()[0].nodeName === 'text'){
+        const padding = 20;
+        bbox.x = bbox.x - padding
+        bbox.y = bbox.y - padding
+        bbox.width = bbox.width + 2 * padding
+        bbox.height = bbox.height + 2 * padding
+      }
       // apply the transforms
       const l = bbox.x; const t = bbox.y; const w = bbox.width; const h = bbox.height
       // bbox = {x: l, y: t, width: w, height: h}; // Not in use

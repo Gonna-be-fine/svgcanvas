@@ -1,19 +1,3 @@
-<!--
- * @Author: chris.c Chris.C@frontop.cn
- * @Date: 2024-09-05 17:30:41
- * @LastEditors: chris.c Chris.C@frontop.cn
- * @LastEditTime: 2024-09-06 17:00:50
- * @FilePath: \svgcanvas\demos\t.html
- * @Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
--->
-<!--
- * @Author: chris.c Chris.C@frontop.cn
- * @Date: 2024-09-05 17:30:41
- * @LastEditors: chris.c Chris.C@frontop.cn
- * @LastEditTime: 2024-09-06 11:53:36
- * @FilePath: \svgcanvas\demos\t.html
- * @Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
--->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -29,41 +13,93 @@
 
   <script>
     // 加载自定义字体（注意需要使用字体的绝对或相对路径）
-    opentype.load('./Playfair_Display/PlayfairDisplay-Italic-VariableFont_wght.ttf', function(err, font) {
+    opentype.load('./fonts/NotoSansSC-VariableFont_wght.ttf', function(err, font) {
+    // opentype.load('./fonts/ShipporiAntiqueB1-Regular.ttf', function(err, font) {
       if (err) {
         console.error('无法加载字体:', err);
         return;
       }
 
       // 定义要转换为路径的文字、位置和大小
-      const text = 'helo';
+      const text = '你是谁';
       const fontSize = 72;
       const x = 50;
       const y = 150;
 
+      // 获取文字路径
+      const path = font.getPath(text, x, y, fontSize);
+      const svgPathData = path.toPathData(5); // 转换为 SVG 路径数据
+
+      // 获取 SVG 容器
       const svgElement = document.getElementById('svg');
 
-      const createLayer = (text, fontSize, strokeWidth, color) => {
-        const path = font.getPath(text, x, y, fontSize);
-        const svgPathData = path.toPathData(5);
+      // 定义每层的颜色和描边宽度
+      const layers = [
+        { color: '#0044cc', strokeWidth: 16 },  // 最外层的蓝色描边
+        { color: '#ffee00', strokeWidth: 12 },  // 中间的黄色描边
+        { color: '#000000', strokeWidth: 6 },  // 最里面的黑色描边
+        { color: '#fff', strokeWidth: 2 },    // 最里面的黑色描边
+        { color: '#0f0', strokeWidth: 3 },    // 最里面的黑色描边
+      ];
 
-        const pathElement = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-        pathElement.setAttribute('d', svgPathData);
-        pathElement.setAttribute('fill', 'none');
-        pathElement.setAttribute('stroke', color);
-        pathElement.setAttribute('stroke-width', strokeWidth);
+      // 逐层绘制描边
+      layers.forEach(layer => {
+        const outlineElement = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        outlineElement.setAttribute('d', svgPathData);
+        outlineElement.setAttribute('fill', 'none');
+        outlineElement.setAttribute('stroke', layer.color);
+        outlineElement.setAttribute('stroke-width', layer.strokeWidth);
+        outlineElement.setAttribute('stroke-linejoin', 'round');  // 圆滑的边角
+        svgElement.appendChild(outlineElement);
+      });
 
-        return pathElement;
-      };
-
-      // 依次创建每个层次的路径
-      const layers = 3;
-      const initialStrokeWidth = 2;
-      const colors = ['#FF5733', '#33FF57', '#3357FF', '#FF33A1', '#33FFA1']; // 可自定义颜色
-      for (let i = 1; i <= layers; i++) {
-        const layer = createLayer(text, fontSize + i * 5, initialStrokeWidth + i * 2, colors[i - 1]);
-        svgElement.appendChild(layer);
-      }
+      // // 最后绘制填充的文字
+      // const textElement = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      // textElement.setAttribute('d', svgPathData);
+      // textElement.setAttribute('fill', '#000000');  // 文字填充为黑色
+      // textElement.setAttribute('stroke', 'none');
+      // svgElement.appendChild(textElement);
+      
+      // const svgElement = document.getElementById('svg');
+      // // 获取该文字的路径
+      // const path = font.getPath(text, x, y, fontSize);
+      // const svgPathData = path.toPathData(5); // 转换为 SVG 的 path 数据
+      // // 创建 <path> 元素以绘制文字
+      // const pathElement = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      // pathElement.setAttribute('d', svgPathData);
+      // pathElement.setAttribute('fill', 'black');
+      // pathElement.setAttribute('stroke', 'blue');
+      // pathElement.setAttribute('stroke-width', '1');
+      // svgElement.appendChild(pathElement);
+      // // 绘制围绕文字的边框 (膨胀路径的效果)
+      // const outlineElement = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      // outlineElement.setAttribute('d', svgPathData); // 使用相同的路径数据
+      // outlineElement.setAttribute('fill', 'none');
+      // outlineElement.setAttribute('stroke', 'red'); // 边框颜色
+      // outlineElement.setAttribute('stroke-width', '14'); // 边框宽度
+      // outlineElement.setAttribute('stroke-linejoin', 'round'); // 边框角的连接方式
+      // outlineElement.setAttribute('stroke-linecap', 'round'); // 边框线端样式
+      // svgElement.insertBefore(outlineElement, pathElement); // 将边框放在文字的下层
+      
+      // const svgElement = document.getElementById('svg');
+      // const createLayer = (text, fontSize, strokeWidth, color) => {
+        //   const path = font.getPath(text, x, y, fontSize);
+        //   const svgPathData = path.toPathData(5);
+        //   const pathElement = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        //   pathElement.setAttribute('d', svgPathData);
+      //   pathElement.setAttribute('fill', 'none');
+      //   pathElement.setAttribute('stroke', color);
+      //   pathElement.setAttribute('stroke-width', strokeWidth);
+      //   return pathElement;
+      // };
+      // // 依次创建每个层次的路径
+      // const layers = 3;
+      // const initialStrokeWidth = 2;
+      // const colors = ['#FF5733', '#33FF57', '#3357FF', '#FF33A1', '#33FFA1']; // 可自定义颜色
+      // for (let i = 1; i <= layers; i++) {
+      //   const layer = createLayer(text, fontSize + i * 5, initialStrokeWidth + i * 2, colors[i - 1]);
+      //   svgElement.appendChild(layer);
+      // }
 
     });
   </script>

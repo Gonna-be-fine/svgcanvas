@@ -166,6 +166,10 @@ const mouseMoveEvent = (evt) => {
           selectedElements.forEach((el) => {
             if (el) {
               updateTransformList(svgRoot, el, dx, dy)
+              const textPath = svgCanvas.getElement(el.id + 'text')
+              if(textPath) {
+                updateTransformList(svgRoot, textPath, dx, dy)
+              }
               // update our internal bbox that we're tracking while dragging
               svgCanvas.selectorManager.requestSelector(el).resize()
             }

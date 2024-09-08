@@ -471,6 +471,10 @@ const recalculateAllSelectedDimensions = () => {
 
   selectedElements.forEach((elem) => {
     const cmd = svgCanvas.recalculateDimensions(elem)
+    const textEl = svgCanvas.getElement(elem.id + 'text')
+    if(textEl){
+      svgCanvas.recalculateDimensions(textEl)
+    }
     if (cmd) {
       batchCmd.addSubCommand(cmd)
     }
