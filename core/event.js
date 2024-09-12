@@ -96,6 +96,84 @@ const updateTransformList = (svgRoot, element, dx, dy) => {
   }
 }
 
+const resize = (selected) => {
+  const tlist = getTransformList(selected)
+  const hasMatrix = hasMatrixTransform(tlist)
+  let box = hasMatrix ? svgCanvas.getInitBbox() : getBBox(selected)
+  let left = box.x
+  let top = box.y
+  let { width, height } = box
+  let dx = (x - svgCanvas.getStartX())
+  let dy = (y - svgCanvas.getStartY())
+  if (svgCanvas.getCurConfig().gridSnapping) {
+    dx = snapToGrid(dx)
+    dy = snapToGrid(dy)
+    height = snapToGrid(height)
+    width = snapToGrid(width)
+  }
+  // if rotated, adjust the dx,dy values
+  let angle = getRotationAngle(selected)
+  if (angle) {
+    const r = Math.sqrt(dx * dx + dy * dy)
+    const theta = Math.atan2(dy, dx) - angle * Math.PI / 180.0
+    dx = r * Math.cos(theta)
+    dy = r * Math.sin(theta)
+  }
+  // if not stretching in y direction, set dy to 0
+  // if not stretching in x direction, set dx to 0
+  if (!svgCanvas.getCurrentResizeMode().includes('n') && !svgCanvas.getCurrentResizeMode().includes('s')) {
+    dy = 0
+  }
+  if (!svgCanvas.getCurrentResizeMode().includes('e') && !svgCanvas.getCurrentResizeMode().includes('w')) {
+    dx = 0
+  }
+  let // ts = null,
+    tx = 0; let ty = 0
+  let sy = height ? (height + dy) / height : 1
+  let sx = width ? (width + dx) / width : 1
+  // if we are dragging on the north side, then adjust the scale factor and ty
+  if (svgCanvas.getCurrentResizeMode().includes('n')) {
+    sy = height ? (height - dy) / height : 1
+    ty = height
+  }
+  // if we dragging on the east side, then adjust the scale factor and tx
+  if (svgCanvas.getCurrentResizeMode().includes('w')) {
+    sx = width ? (width - dx) / width : 1
+    tx = width
+  }
+  // update the transform list with translate,scale,translate
+  const translateOrigin = svgRoot.createSVGTransform()
+  const scale = svgRoot.createSVGTransform()
+  const translateBack = svgRoot.createSVGTransform()
+  if (svgCanvas.getCurConfig().gridSnapping) {
+    left = snapToGrid(left)
+    tx = snapToGrid(tx)
+    top = snapToGrid(top)
+    ty = snapToGrid(ty)
+  }
+  translateOrigin.setTranslate(-(left + tx), -(top + ty))
+  // For images, we maintain aspect ratio by default and relax when shift pressed
+  const maintainAspectRatio = (selected.tagName !== 'image' && evt.shiftKey) || (selected.tagName === 'image' && !evt.shiftKey)
+  if (maintainAspectRatio) {
+    if (sx === 1) {
+      sx = sy
+    } else { sy = sx }
+  }
+  scale.setScale(sx, sy)
+  translateBack.setTranslate(left + tx, top + ty)
+  if (hasMatrix) {
+    const diff = angle ? 1 : 0
+    tlist.replaceItem(translateOrigin, 2 + diff)
+    tlist.replaceItem(scale, 1 + diff)
+    tlist.replaceItem(translateBack, Number(diff))
+  } else {
+    const N = tlist.numberOfItems
+    tlist.replaceItem(translateBack, N - 3)
+    tlist.replaceItem(scale, N - 2)
+    tlist.replaceItem(translateOrigin, N - 1)
+  }
+}
+
 /**
  *
  * @param {MouseEvent} evt
@@ -116,6 +194,12 @@ const mouseMoveEvent = (evt) => {
   const zoom = svgCanvas.getZoom()
   const svgRoot = svgCanvas.getSvgRoot()
   const selected = selectedElements[0]
+  // textPath
+  let textPath;
+  if(selected) {
+    textPath = svgCanvas.getElement(selected.id + 'text')
+  }
+
 
   let i
   let xya
@@ -166,7 +250,6 @@ const mouseMoveEvent = (evt) => {
           selectedElements.forEach((el) => {
             if (el) {
               updateTransformList(svgRoot, el, dx, dy)
-              const textPath = svgCanvas.getElement(el.id + 'text')
               if(textPath) {
                 updateTransformList(svgRoot, textPath, dx, dy)
               }
@@ -303,11 +386,23 @@ const mouseMoveEvent = (evt) => {
         tlist.replaceItem(translateOrigin, 2 + diff)
         tlist.replaceItem(scale, 1 + diff)
         tlist.replaceItem(translateBack, Number(diff))
+        if(textPath) {
+          const tplist = getTransformList(textPath)
+          tplist.replaceItem(translateOrigin, 2 + diff)
+          tplist.replaceItem(scale, 1 + diff)
+          tplist.replaceItem(translateBack, Number(diff))
+        }
       } else {
         const N = tlist.numberOfItems
         tlist.replaceItem(translateBack, N - 3)
         tlist.replaceItem(scale, N - 2)
         tlist.replaceItem(translateOrigin, N - 1)
+        if(textPath) {
+          const tplist = getTransformList(textPath)
+          tplist.replaceItem(translateBack, N - 3)
+          tplist.replaceItem(scale, N - 2)
+          tplist.replaceItem(translateOrigin, N - 1)
+        }
       }
 
       svgCanvas.selectorManager.requestSelector(selected).resize()
@@ -522,7 +617,11 @@ const mouseMoveEvent = (evt) => {
         angle = Math.round(angle / snap) * snap
       }
 
-      svgCanvas.setRotationAngle(angle < -180 ? (360 + angle) : angle, true)
+      svgCanvas.setEleRotationAngle(selectedElements, angle < -180 ? (360 + angle) : angle, true)
+      // 文字path跟随旋转
+      if(textPath) {
+        svgCanvas.setEleRotationAngle([textPath], angle < -180 ? (360 + angle) : angle, true, false)
+      }
       svgCanvas.call('transition', selectedElements)
       break
     }
@@ -969,6 +1068,14 @@ const mouseDownEvent = (evt) => {
   const curShape = svgCanvas.getStyle()
   const svgRoot = svgCanvas.getSvgRoot()
   const { $id } = svgCanvas
+  // textPath
+  let textPath, textTList;
+  if(selectedElements[0]) {
+    textPath = svgCanvas.getElement(selectedElements[0].id + 'text')
+    if(textPath) {
+      textTList = getTransformList(textPath)
+    }
+  }
 
   if (svgCanvas.spaceKey || evt.button === 1) { return }
 
@@ -1081,20 +1188,20 @@ const mouseDownEvent = (evt) => {
         }
       } else if (!rightClick) {
         svgCanvas.clearSelection()
-        svgCanvas.setCurrentMode('multiselect')
-        if (!svgCanvas.getRubberBox()) {
-          svgCanvas.setRubberBox(svgCanvas.selectorManager.getRubberBandBox())
-        }
-        svgCanvas.setRStartX(svgCanvas.getRStartX() * zoom)
-        svgCanvas.setRStartY(svgCanvas.getRStartY() * zoom)
+        // svgCanvas.setCurrentMode('multiselect')
+        // if (!svgCanvas.getRubberBox()) {
+        //   svgCanvas.setRubberBox(svgCanvas.selectorManager.getRubberBandBox())
+        // }
+        // svgCanvas.setRStartX(svgCanvas.getRStartX() * zoom)
+        // svgCanvas.setRStartY(svgCanvas.getRStartY() * zoom)
 
-        assignAttributes(svgCanvas.getRubberBox(), {
-          x: svgCanvas.getRStartX(),
-          y: svgCanvas.getRStartY(),
-          width: 0,
-          height: 0,
-          display: 'inline'
-        }, 100)
+        // assignAttributes(svgCanvas.getRubberBox(), {
+        //   x: svgCanvas.getRStartX(),
+        //   y: svgCanvas.getRStartY(),
+        //   width: 0,
+        //   height: 0,
+        //   display: 'inline'
+        // }, 100)
       }
       break
     case 'zoom':
@@ -1132,7 +1239,6 @@ const mouseDownEvent = (evt) => {
       // append three dummy transforms to the tlist so that
       // we can translate,scale,translate in mousemove
       const pos = getRotationAngle(mouseTarget) ? 1 : 0
-
       if (hasMatrixTransform(tlist)) {
         tlist.insertItemBefore(svgRoot.createSVGTransform(), pos)
         tlist.insertItemBefore(svgRoot.createSVGTransform(), pos)
@@ -1141,6 +1247,17 @@ const mouseDownEvent = (evt) => {
         tlist.appendItem(svgRoot.createSVGTransform())
         tlist.appendItem(svgRoot.createSVGTransform())
         tlist.appendItem(svgRoot.createSVGTransform())
+      }
+      if(textPath) {
+        if(hasMatrixTransform(textTList)) {
+          textTList.insertItemBefore(svgRoot.createSVGTransform(), pos)
+          textTList.insertItemBefore(svgRoot.createSVGTransform(), pos)
+          textTList.insertItemBefore(svgRoot.createSVGTransform(), pos)
+        } else{
+          textTList.appendItem(svgRoot.createSVGTransform())
+          textTList.appendItem(svgRoot.createSVGTransform())
+          textTList.appendItem(svgRoot.createSVGTransform())
+        }
       }
       break
     }

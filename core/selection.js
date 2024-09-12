@@ -38,6 +38,7 @@ export const init = (canvas) => {
   svgCanvas.prepareSvg = prepareSvg
   svgCanvas.recalculateAllSelectedDimensions = recalculateAllSelectedDimensions
   svgCanvas.setRotationAngle = setRotationAngle
+  svgCanvas.setEleRotationAngle = setEleRotationAngle
 }
 
 /**
@@ -454,6 +455,80 @@ const setRotationAngle = (val, preventUndo) => {
   )
   selector.resize()
   svgCanvas.getSelector().updateGripCursors(val)
+}
+
+const setEleRotationAngle = (el, val, preventUndo, isUpdateCursor=true) => {
+  const selectedElements = el
+  // ensure val is the proper type
+  val = Number.parseFloat(val)
+  const elem = selectedElements[0]
+  const oldTransform = elem.getAttribute('transform')
+  const bbox = getBBox(elem)
+  const cx = bbox.x + bbox.width / 2
+  const cy = bbox.y + bbox.height / 2
+  const tlist = getTransformList(elem)
+
+  // only remove the real rotational transform if present (i.e. at index=0)
+  if (tlist.numberOfItems > 0) {
+    const xform = tlist.getItem(0)
+    if (xform.type === 4) {
+      tlist.removeItem(0)
+    }
+  }
+  // find Rnc and insert it
+  if (val !== 0) {
+    const center = transformPoint(
+      cx,
+      cy,
+      transformListToTransform(tlist).matrix
+    )
+    const Rnc = svgCanvas.getSvgRoot().createSVGTransform()
+    Rnc.setRotate(val, center.x, center.y)
+    if (tlist.numberOfItems) {
+      tlist.insertItemBefore(Rnc, 0)
+    } else {
+      tlist.appendItem(Rnc)
+    }
+  } else if (tlist.numberOfItems === 0) {
+    elem.removeAttribute('transform')
+  }
+
+  if (!preventUndo) {
+    // we need to undo it, then redo it so it can be undo-able! :)
+    // TODO: figure out how to make changes to transform list undo-able cross-browser?
+    let newTransform = elem.getAttribute('transform')
+    // new transform is something like: 'rotate(5 1.39625e-8 -11)'
+    // we round the x so it becomes 'rotate(5 0 -11)'
+    if (newTransform) {
+      const newTransformArray = newTransform.split(' ')
+      const round = (num) => Math.round(Number(num) + Number.EPSILON)
+      const x = round(newTransformArray[1])
+      newTransform = `${newTransformArray[0]} ${x} ${newTransformArray[2]}`
+    }
+
+    if (oldTransform) {
+      elem.setAttribute('transform', oldTransform)
+    } else {
+      elem.removeAttribute('transform')
+    }
+    svgCanvas.changeSelectedAttribute(
+      'transform',
+      newTransform,
+      selectedElements
+    )
+    svgCanvas.call('changed', selectedElements)
+  }
+  // const pointGripContainer = getElement('pathpointgrip_container');
+  // if (elem.nodeName === 'path' && pointGripContainer) {
+  //   pathActions.setPointContainerTransform(elem.getAttribute('transform'));
+  // }
+  if(isUpdateCursor) {
+    const selector = svgCanvas.selectorManager.requestSelector(
+      selectedElements[0]
+    )
+    selector.resize()
+    svgCanvas.getSelector().updateGripCursors(val)
+  }
 }
 
 /**

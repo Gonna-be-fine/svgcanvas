@@ -610,6 +610,12 @@ const deleteSelectedElements = () => {
       const elem = t
       selectedCopy.push(selected) // for the copy
       batchCmd.addSubCommand(new RemoveElementCommand(elem, nextSibling, parent))
+
+      // 如果有textPath，删除
+      const textPath = svgCanvas.getElement(selected.id + 'text')
+      if(textPath) {
+        textPath.remove()
+      }
     }
   })
   svgCanvas.setEmptySelectedElements()
