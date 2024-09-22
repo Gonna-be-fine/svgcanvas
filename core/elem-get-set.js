@@ -71,7 +71,7 @@ export const init = (canvas) => {
 }
 
 const text2Path = (text, x, y, id) => {
-  opentype.load('./fonts/NotoSansSC-VariableFont_wght.ttf', function(err, font) {
+  opentype.load(svgCanvas.getCurConfig().fontFile, function(err, font) {
     // opentype.load('./fonts/ShipporiAntiqueB1-Regular.ttf', function(err, font) {
       if (err) {
         console.error('无法加载字体:', err);

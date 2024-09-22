@@ -10,6 +10,7 @@ import { isWebkit } from '../common/browser.js'
 import { getRotationAngle, getBBox, getStrokedBBox } from './utilities.js'
 import { transformListToTransform, transformBox, transformPoint, matrixMultiply, getTransformList } from './math.js'
 import { NS } from './namespaces'
+import { selectButtons } from './core/select.js'
 
 let svgCanvas
 let selectorManager_ // A Singleton
@@ -356,7 +357,7 @@ export class SelectorManager {
         grip = this.createIconSelector({
           dir,
           size: 20,
-          href: '../img/delete.svg',
+          href: svgCanvas.curConfig.imgBase64 ? svgCanvas.curConfig.imgBase64 : svgCanvas.curConfig.imgPath + selectButtons[dir].icon,
         })
       }else if(['nw'].includes(dir)) {
         grip = this.createIconSelector({

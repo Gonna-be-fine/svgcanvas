@@ -59,10 +59,73 @@ export const init = canvas => {
   svgCanvas.convertGradients = convertGradientsMethod
   svgCanvas.removeUnusedDefElems = removeUnusedDefElemsMethod // remove DOM elements inside the `<defs>` if they are notreferred to,
   svgCanvas.svgCanvasToString = svgCanvasToString // Main function to set up the SVG content for output.
+  svgCanvas.svg2String = svg2String // Main function to set up the SVG content for output.
   svgCanvas.svgToString = svgToString // Sub function ran on each SVG element to convert it to a string as desired.
   svgCanvas.embedImage = embedImage // Converts a given image file to a data URL when possibl
   svgCanvas.rasterExport = rasterExport // Generates a PNG (or JPG, BMP, WEBP) Data URL based on the current image
   svgCanvas.exportPDF = exportPDF // Generates a PDF based on the current image, then calls "exportedPDF"
+}
+
+const svg2String = () => {
+  svgCanvas.saveOptions.apply = true
+  // keep calling it until there are none to remove
+  while (svgCanvas.removeUnusedDefElems() > 0) {} // eslint-disable-line no-empty
+
+  svgCanvas.pathActions.clear(true)
+
+  // Keep SVG-Edit comment on top
+  const childNodesElems = svgCanvas.getSvgContent().childNodes
+  childNodesElems.forEach((node, i) => {
+    if (i && node.nodeType === 8 && node.data.includes('Created with')) {
+      svgCanvas.getSvgContent().firstChild.before(node)
+    }
+  })
+
+  // Move out of in-group editing mode
+  if (svgCanvas.getCurrentGroup()) {
+    draw.leaveContext()
+    svgCanvas.selectOnly([svgCanvas.getCurrentGroup()])
+  }
+  const svgContent = svgCanvas.getSvgContent().cloneNode(true)
+  // 增加selectGroup
+  const selection = svgCanvas.getElement('selectorGroup0');
+  if(selection && selection.getAttribute('display') === 'inline') {
+    const selectGroup = svgCanvas.getElement('selectorParentGroup');
+    if(selectGroup){
+      const sg = selectGroup.cloneNode(true)
+      svgContent.appendChild(sg);
+    }
+  }
+
+  // const nakedSvgs = []
+
+  // // Unwrap gsvg if it has no special attributes (only id and style)
+  // const gsvgElems = svgCanvas.getSvgContent().querySelectorAll('g[data-gsvg]')
+  // Array.prototype.forEach.call(gsvgElems, element => {
+  //   const attrs = element.attributes
+  //   let len = attrs.length
+  //   for (let i = 0; i < len; i++) {
+  //     if (attrs[i].nodeName === 'id' || attrs[i].nodeName === 'style') {
+  //       len--
+  //     }
+  //   }
+  //   // No significant attributes, so ungroup
+  //   if (len <= 0) {
+  //     const svg = element.firstChild
+  //     nakedSvgs.push(svg)
+  //     element.replaceWith(svg)
+  //   }
+  // })
+  const output = svgCanvas.svgToString(svgContent, 0)
+
+  // // Rewrap gsvg
+  // if (nakedSvgs.length) {
+  //   Array.prototype.forEach.call(nakedSvgs, el => {
+  //     svgCanvas.groupSvgElem(el)
+  //   })
+  // }
+
+  return output
 }
 
 /**
