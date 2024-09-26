@@ -16,6 +16,7 @@ import {
 import { getParents } from '../common/util.js'
 
 import opentype from './lib/opentype.js';
+import { InsertElementCommand } from './history.js'
 
 let svgCanvas = null
 
@@ -68,6 +69,63 @@ export const init = (canvas) => {
   svgCanvas.setPaint = setPaintMethod // Set a color/gradient to a fill/stroke.
   svgCanvas.diyAddText = diyAddText // 添加文字
   svgCanvas.text2Path = text2Path // 文字转Path
+  svgCanvas.updateDiyText = updateDiyText // 更新文字Path
+  svgCanvas.addDiyImage = addDiyImage // 添加diy Image
+}
+
+const addDiyImage = (url, x, y) => {
+  // regular URL
+  const promised = svgCanvas.embedImage(url);
+  // eslint-disable-next-line promise/catch-or-return
+  promised
+  // eslint-disable-next-line promise/always-return
+  .then((res) => {
+    // // switch into "select" mode if we've clicked on an element
+    const { width, height, data } = res;
+    const max = Math.max(svgCanvas.getWidth(), svgCanvas.getHeight());
+    const maxLen = Math.max(width, height);
+    let ratio = 1;
+    if(max / 2 < maxLen) {
+      ratio = max/2/maxLen
+    }
+    const newImage = svgCanvas.addSVGElementsFromJson({
+      element: 'image',
+      attr: {
+        x,
+        y,
+        width: res.width * ratio,
+        height: res.height * ratio,
+        id: svgCanvas.getNextId(),
+        opacity: 1,
+        style: 'pointer-events:inherit'
+      }
+    })
+    setHref(newImage, data)
+
+    // 选中图片
+    svgCanvas.setMode('select');
+    svgCanvas.selectOnly([newImage])
+    svgCanvas.selectorManager.requestSelector(svgCanvas.selectedElements[0]).showGrips(true)
+    // 增加图片记录
+    svgCanvas.addCommandToHistory(new InsertElementCommand(newImage))
+    svgCanvas.call('changed', [newImage])
+  }, error => {
+    console.error('error =', error);
+    svgCanvas.deleteSelectedElements();
+  });
+  // preventClickDefault(newImage)
+}
+
+const updateDiyText = (id, side, key, value) => {
+  const selected = svgCanvas.getElement(id + 'text')
+  if(!selected) {
+    throw new Error('cannot find Element')
+  }
+  const path = selected.querySelector(`[textType=${side}]`);
+  if(!path) {
+    throw new Error('cannot find element of this type')
+  }
+  path.setAttribute(key, value);
 }
 
 const text2Path = (text, x, y, id) => {
@@ -98,16 +156,17 @@ const text2Path = (text, x, y, id) => {
       })
 
       // 定义每层的颜色和描边宽度
-      const layers = [
-        { color: '#0044cc', strokeWidth: 16 },  // 最外层的蓝色描边
-        { color: '#ffee00', strokeWidth: 12 },  // 中间的黄色描边
-        { color: '#000000', strokeWidth: 6 },  // 最里面的黑色描边
+      const layers = svgCanvas.getCurConfig().textPath || [
+        { type: 'outside', color: '#0044cc', strokeWidth: 16 },  // 最外层的蓝色描边
+        { type: 'middle', color: '#ffee00', strokeWidth: 12 },  // 中间的黄色描边
+        { type: 'inside', color: '#000000', strokeWidth: 6 },  // 最里面的黑色描边
       ];
 
       // 逐层绘制描边
       layers.forEach(layer => {
         const outlineElement = document.createElementNS('http://www.w3.org/2000/svg', 'path');
         outlineElement.setAttribute('d', svgPathData);
+        outlineElement.setAttribute('textType', layer.type);
         outlineElement.setAttribute('fill', 'none');
         outlineElement.setAttribute('stroke', layer.color);
         outlineElement.setAttribute('stroke-width', layer.strokeWidth);
@@ -146,6 +205,10 @@ const diyAddText = (x, y, text) => {
 
   const tbox = newText.getBBox();
   svgCanvas.text2Path(text, x-tbox.width/2, y, newText.id)
+
+  // 增加文字记录
+  svgCanvas.addCommandToHistory(new InsertElementCommand(newText))
+  svgCanvas.call('changed', [newText])
 }
 
 /**

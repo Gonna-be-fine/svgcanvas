@@ -842,7 +842,11 @@ const embedImage = src => {
         svgCanvas.setEncodableImages(src, false)
       }
       svgCanvas.setGoodImage(src)
-      resolve(svgCanvas.getEncodableImages(src))
+      resolve({
+        data: svgCanvas.getEncodableImages(src),
+        width: e.currentTarget.width,
+        height: e.currentTarget.height,
+      })
     })
     imgI.addEventListener('error', e => {
       reject(

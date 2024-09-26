@@ -101,9 +101,54 @@ export const getUndoManager = () => {
             }
           }
         }
+
+        if(cmd.elem) {
+          // 根据el来更新textPath
+          const textPath = svgCanvas.getElement(cmd.elem.id + 'text')
+          if(textPath) {
+            switch(cmdType){
+              case 'MoveElementCommand':
+              case 'ChangeElementCommand':
+                resetTextPath(cmd.elem, textPath, cmd, eventType);
+                break;
+            }
+          }
+        }
       }
     }
   })
+}
+
+const resetTextPath = (text, textPath, cmd, eventType) => {
+  // const [dx, dy] = [cmd.newValues.x - cmd.oldValues.x,
+  //   cmd.newValues.y - cmd.oldValues.y]
+  //   const unapply = (eventType === HistoryEventTypes.AFTER_UNAPPLY)
+  //   let  x = unapply ? - dx : dx
+  //   let  y = unapply ? - dy : dy
+  if(!(cmd.newValues.transform && cmd.oldValues.transform) || cmd.oldValues.transform === cmd.newValues.transform) {
+    // 获取path和text的边界框
+    const pathBBox = textPath.getBBox();
+    const textBBox = text.getBBox();
+
+    // 计算path和text中心点
+    const pathCenterX = pathBBox.x + pathBBox.width / 2;
+    const pathCenterY = pathBBox.y + pathBBox.height / 2;
+    const textCenterX = textBBox.x + textBBox.width / 2;
+    const textCenterY = textBBox.y + textBBox.height / 2;
+
+    // 计算中心点之间的距离
+    const dx = textCenterX - pathCenterX;
+    const dy = textCenterY - pathCenterY;
+
+    const transform = svgCanvas.getSvgRoot().createSVGTransform(); // 创建新的SVGTransform对象
+    transform.setTranslate(dx, dy); // 设置平移
+
+    const tplist = getTransformList(textPath)
+    tplist.appendItem(transform);
+  } else {
+    // 应用相同的变换到路径上
+    textPath.setAttribute('transform', cmd.oldValues.transform || '');
+  }
 }
 
 /**
