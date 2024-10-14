@@ -71,12 +71,27 @@ export const init = (canvas) => {
   svgCanvas.text2Path = text2Path // 文字转Path
   svgCanvas.updateDiyText = updateDiyText // 更新文字Path
   svgCanvas.addDiyImage = addDiyImage // 添加diy Image
+  svgCanvas.deleteElementById = deleteElementById // 根据id删除元素
+}
+
+const deleteElementById = (id) => {
+  const el = svgCanvas.getElement(id);
+  if(!el) {
+    console.warn('element of this id is not exist');
+    return;
+  }
+  el.remove();
+  const text = svgCanvas.getElement(id + 'text');
+  if(text) {
+    text.remove();
+  }
 }
 
 const addDiyImage = (url, x, y) => {
   // regular URL
   const promised = svgCanvas.embedImage(url);
   // eslint-disable-next-line promise/catch-or-return
+  const nextId = svgCanvas.getNextId();
   promised
   // eslint-disable-next-line promise/always-return
   .then((res) => {
@@ -95,7 +110,7 @@ const addDiyImage = (url, x, y) => {
         y,
         width: res.width * ratio,
         height: res.height * ratio,
-        id: svgCanvas.getNextId(),
+        id: nextId,
         opacity: 1,
         style: 'pointer-events:inherit'
       }
@@ -113,6 +128,7 @@ const addDiyImage = (url, x, y) => {
     console.error('error =', error);
     svgCanvas.deleteSelectedElements();
   });
+  return nextId;
   // preventClickDefault(newImage)
 }
 
@@ -128,19 +144,19 @@ const updateDiyText = (id, side, key, value) => {
   path.setAttribute(key, value);
 }
 
-const text2Path = (text, x, y, id) => {
-  opentype.load(svgCanvas.getCurConfig().fontFile, function(err, font) {
-    // opentype.load('./fonts/ShipporiAntiqueB1-Regular.ttf', function(err, font) {
+const text2Path = (x, y, id, textOptions) => {
+  const { content, fontSize, borders, fontFile } = textOptions
+  opentype.load(fontFile, function(err, font) {
       if (err) {
         console.error('无法加载字体:', err);
         return;
       }
 
       // 定义要转换为路径的文字、位置和大小
-      const fontSize = svgCanvas.getFontSize()-5;
+      // const fontSize = svgCanvas.getFontSize()-5;
 
       // 获取文字路径
-      const path = font.getPath(text, x, y, fontSize);
+      const path = font.getPath(content, x, y, fontSize);
       const svgPathData = path.toPathData(5); // 转换为 SVG 路径数据
 
       // 获取 SVG 容器
@@ -151,12 +167,22 @@ const text2Path = (text, x, y, id) => {
           id: id + 'text',
           opacity: 1,
           style: 'pointer-events:none',
+          class: 'noEvent'
+        }
+      })
+      const _svgElement = svgCanvas.addSVGElementsFromJson({
+        element: 'g',
+        curStyles: true,
+        attr: {
+          opacity: 1,
+          style: 'pointer-events:none',
           class: 'noEvent',
         }
       })
+      svgElement.appendChild(_svgElement)
 
       // 定义每层的颜色和描边宽度
-      const layers = svgCanvas.getCurConfig().textPath || [
+      const layers = borders || [
         { type: 'outside', color: '#0044cc', strokeWidth: 16 },  // 最外层的蓝色描边
         { type: 'middle', color: '#ffee00', strokeWidth: 12 },  // 中间的黄色描边
         { type: 'inside', color: '#000000', strokeWidth: 6 },  // 最里面的黑色描边
@@ -171,8 +197,11 @@ const text2Path = (text, x, y, id) => {
         outlineElement.setAttribute('stroke', layer.color);
         outlineElement.setAttribute('stroke-width', layer.strokeWidth);
         outlineElement.setAttribute('stroke-linejoin', 'round');  // 圆滑的边角
-        svgElement.appendChild(outlineElement);
+        _svgElement.appendChild(outlineElement);
       });
+      const textBox = _svgElement.getBBox()
+      const newTranslate = `translate(${-textBox.width/2 - (textBox.x - x)}, 0)`;
+      _svgElement.setAttribute('transform', newTranslate)
     });
 }
 
@@ -182,7 +211,8 @@ const text2Path = (text, x, y, id) => {
 * @param {number} y
 * @param {string} text
 */
-const diyAddText = (x, y, text) => {
+const diyAddText = (x, y, textOptions) => {
+  const { content, fontSize, fontType } = textOptions
   const newText = svgCanvas.addSVGElementsFromJson({
     element: 'text',
     curStyles: true,
@@ -192,23 +222,25 @@ const diyAddText = (x, y, text) => {
       id: svgCanvas.getNextId(),
       fill: svgCanvas.getCurText('fill'),
       'stroke-width': svgCanvas.getCurText('stroke_width'),
-      'font-size': svgCanvas.getCurText('font_size'),
+      'font-size': fontSize,
       'font-family': svgCanvas.getCurText('font_family'),
       'text-anchor': 'middle',
       'xml:space': 'preserve',
+      fontType,
       opacity: 0
     }
   })
-  newText.textContent = text
+  newText.textContent = content
   svgCanvas.selectOnly([newText])
   svgCanvas.selectorManager.requestSelector(svgCanvas.selectedElements[0]).showGrips(true)
 
-  const tbox = newText.getBBox();
-  svgCanvas.text2Path(text, x-tbox.width/2, y, newText.id)
+  // const tbox = newText.getBBox();
+  svgCanvas.text2Path(x, y, newText.id, textOptions)
 
   // 增加文字记录
   svgCanvas.addCommandToHistory(new InsertElementCommand(newText))
   svgCanvas.call('changed', [newText])
+  return newText.id;
 }
 
 /**
