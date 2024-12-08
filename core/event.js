@@ -677,8 +677,11 @@ const mouseUpEvent = (evt) => {
   if (evt.button === 2) { return }
   // 删除所选
   if(svgCanvas.getCurrentResizeMode() === 'se') {
+    const deleteId = svgCanvas.getSelectedElements()[0].id
+    const nodeType = svgCanvas.getSelectedElements()[0].nodeName
     svgCanvas.deleteSelectedElements()
     svgCanvas.setStarted(true)
+    svgCanvas.call('delete', {id: deleteId, type: nodeType})
   }
   if (!svgCanvas.getStarted()) { return }
 
@@ -1012,6 +1015,7 @@ const mouseUpEvent = (evt) => {
 }
 
 const dblClickEvent = (evt) => {
+  return;
   const selectedElements = svgCanvas.getSelectedElements()
   const evtTarget = evt.target
   const parent = evtTarget.parentNode

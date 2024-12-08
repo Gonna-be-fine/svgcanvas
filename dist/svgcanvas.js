@@ -10611,8 +10611,14 @@ const mouseUpEvent = evt => {
   }
   // 删除所选
   if (svgCanvas$9.getCurrentResizeMode() === 'se') {
+    const deleteId = svgCanvas$9.getSelectedElements()[0].id;
+    const nodeType = svgCanvas$9.getSelectedElements()[0].nodeName;
     svgCanvas$9.deleteSelectedElements();
     svgCanvas$9.setStarted(true);
+    svgCanvas$9.call('delete', {
+      id: deleteId,
+      type: nodeType
+    });
   }
   if (!svgCanvas$9.getStarted()) {
     return;
@@ -10948,40 +10954,7 @@ const mouseUpEvent = evt => {
   svgCanvas$9.setStartTransform(null);
 };
 const dblClickEvent = evt => {
-  const selectedElements = svgCanvas$9.getSelectedElements();
-  const evtTarget = evt.target;
-  const parent = evtTarget.parentNode;
-  let mouseTarget = svgCanvas$9.getMouseTarget(evt);
-  const {
-    tagName
-  } = mouseTarget;
-  if (tagName === 'text' && svgCanvas$9.getCurrentMode() !== 'textedit') {
-    const pt = transformPoint(evt.clientX, evt.clientY, svgCanvas$9.getrootSctm());
-    svgCanvas$9.textActions.select(mouseTarget, pt.x, pt.y);
-  }
-
-  // Do nothing if already in current group
-  if (parent === svgCanvas$9.getCurrentGroup()) {
-    return;
-  }
-  if ((tagName === 'g' || tagName === 'a') && getRotationAngle(mouseTarget)) {
-    // TODO: Allow method of in-group editing without having to do
-    // this (similar to editing rotated paths)
-
-    // Ungroup and regroup
-    svgCanvas$9.pushGroupProperties(mouseTarget);
-    mouseTarget = selectedElements[0];
-    svgCanvas$9.clearSelection(true);
-  }
-  // Reset context
-  if (svgCanvas$9.getCurrentGroup()) {
-    leaveContext();
-  }
-  if (parent.tagName !== 'g' && parent.tagName !== 'a' || parent === svgCanvas$9.getCurrentDrawing().getCurrentLayer() || mouseTarget === svgCanvas$9.selectorManager.selectorParentGroup) {
-    // Escape from in-group edit
-    return;
-  }
-  setContext(mouseTarget);
+  return;
 };
 
 /**
@@ -27124,6 +27097,9 @@ const deleteElementById = id => {
     console.warn('element of this id is not exist');
     return;
   }
+  if (svgCanvas$7.selectedElements[0] && svgCanvas$7.selectedElements[0].id === id) {
+    svgCanvas$7.selectorManager.releaseSelector(svgCanvas$7.selectedElements[0]);
+  }
   el.remove();
   const text = svgCanvas$7.getElement(id + 'text');
   if (text) {
@@ -27178,94 +27154,134 @@ const addDiyImage = (url, x, y) => {
   return nextId;
   // preventClickDefault(newImage)
 };
-const updateDiyText = (id, side, key, value) => {
+const updateDiyText = (id, key, value) => {
   const selected = svgCanvas$7.getElement(id + 'text');
   if (!selected) {
     throw new Error('cannot find Element');
   }
-  const path = selected.querySelector(`[textType=${side}]`);
-  if (!path) {
-    throw new Error('cannot find element of this type');
+  if (key === 'borders') {
+    for (let i = 0; i < value.borders.length; i++) {
+      const path = selected.querySelector(`[textType=${value.borders[i].type}]`);
+      if (!path) {
+        throw new Error('cannot find element of this type');
+      }
+      path.setAttribute('stroke', value.borders[i].color);
+      path.setAttribute('stroke-width', value.borders[i].strokeWidth);
+    }
+  } else {
+    const text = svgCanvas$7.getElement(id);
+    const box = text.getBBox();
+    selected.remove();
+    text.remove();
+    svgCanvas$7.diyAddText(text, box.x + box.width / 2, box.y + box.height / 2, value);
   }
-  path.setAttribute(key, value);
 };
-const text2Path = (x, y, id, textOptions) => {
+const loadFontType = (type, file) => {
+  svgCanvas$7.fontOption = {
+    type,
+    file
+  };
+  return new Promise((resolve, reject) => {
+    opentype.load(file, (err, font) => {
+      if (err) {
+        console.error('无法加载字体:', err);
+        reject(null);
+      }
+      svgCanvas$7.fontOption.font = font;
+      resolve(font);
+    });
+  });
+};
+const text2Path = async (x, y, id, textOptions, originText) => {
   const {
     content,
     fontSize,
     borders,
-    fontFile
+    fontFile,
+    fontType
   } = textOptions;
-  opentype.load(fontFile, function (err, font) {
-    if (err) {
-      console.error('无法加载字体:', err);
-      return;
-    }
-
-    // 定义要转换为路径的文字、位置和大小
-    // const fontSize = svgCanvas.getFontSize()-5;
-
-    // 获取文字路径
-    const path = font.getPath(content, x, y, fontSize);
-    const svgPathData = path.toPathData(5); // 转换为 SVG 路径数据
-
-    // 获取 SVG 容器
-    const svgElement = svgCanvas$7.addSVGElementsFromJson({
-      element: 'g',
-      curStyles: true,
-      attr: {
-        id: id + 'text',
-        opacity: 1,
-        style: 'pointer-events:none',
-        class: 'noEvent'
-      }
-    });
-    const _svgElement = svgCanvas$7.addSVGElementsFromJson({
-      element: 'g',
-      curStyles: true,
-      attr: {
-        opacity: 1,
-        style: 'pointer-events:none',
-        class: 'noEvent'
-      }
-    });
-    svgElement.appendChild(_svgElement);
-
-    // 定义每层的颜色和描边宽度
-    const layers = borders || [{
-      type: 'outside',
-      color: '#0044cc',
-      strokeWidth: 16
-    },
-    // 最外层的蓝色描边
-    {
-      type: 'middle',
-      color: '#ffee00',
-      strokeWidth: 12
-    },
-    // 中间的黄色描边
-    {
-      type: 'inside',
-      color: '#000000',
-      strokeWidth: 6
-    } // 最里面的黑色描边
-    ];
-
-    // 逐层绘制描边
-    layers.forEach(layer => {
-      const outlineElement = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-      outlineElement.setAttribute('d', svgPathData);
-      outlineElement.setAttribute('textType', layer.type);
-      outlineElement.setAttribute('fill', 'none');
-      outlineElement.setAttribute('stroke', layer.color);
-      outlineElement.setAttribute('stroke-width', layer.strokeWidth);
-      outlineElement.setAttribute('stroke-linejoin', 'round'); // 圆滑的边角
-      _svgElement.appendChild(outlineElement);
-    });
-    const textBox = _svgElement.getBBox();
-    const newTranslate = `translate(${-textBox.width / 2 - (textBox.x - x)}, 0)`;
-    _svgElement.setAttribute('transform', newTranslate);
+  // 获取文字路径
+  if (!svgCanvas$7.fontOption || svgCanvas$7.fontOption.type !== fontType) {
+    await loadFontType(fontType, fontFile);
+  }
+  const path = svgCanvas$7.fontOption.font.getPath(content, x, y, fontSize);
+  // 获取路径的边界框 (bounding box)
+  const bbox = path.getBoundingBox();
+  // 计算宽度
+  const width = bbox.x2 - bbox.x1;
+  // 平移路径，将其 x 移动到 width / 2
+  const translateX = -width / 2 - (bbox.x1 - x);
+  path.commands.forEach(cmd => {
+    if (cmd.x !== undefined) cmd.x += translateX;
+    if (cmd.x1 !== undefined) cmd.x1 += translateX; // 控制点1 (贝塞尔曲线)
+    if (cmd.x2 !== undefined) cmd.x2 += translateX; // 控制点2 (贝塞尔曲线)
   });
+  const svgPathData = path.toPathData(10); // 转换为 SVG 路径数据
+
+  // 获取 SVG 容器
+  const svgElement = svgCanvas$7.addSVGElementsFromJson({
+    element: 'g',
+    curStyles: true,
+    attr: {
+      id: id + 'text',
+      opacity: 1,
+      style: 'pointer-events:none',
+      class: 'noEvent'
+    }
+  });
+
+  // 定义每层的颜色和描边宽度
+  const layers = borders || [{
+    type: 'outside',
+    color: '#0044cc',
+    strokeWidth: 16
+  },
+  // 最外层的蓝色描边
+  {
+    type: 'middle',
+    color: '#ffee00',
+    strokeWidth: 12
+  },
+  // 中间的黄色描边
+  {
+    type: 'inside',
+    color: '#000000',
+    strokeWidth: 6
+  } // 最里面的黑色描边
+  ];
+
+  // 逐层绘制描边
+  layers.forEach(layer => {
+    const outlineElement = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    outlineElement.setAttribute('d', svgPathData);
+    outlineElement.setAttribute('textType', layer.type);
+    outlineElement.setAttribute('fill', 'none');
+    outlineElement.setAttribute('stroke', layer.color);
+    outlineElement.setAttribute('stroke-width', layer.strokeWidth);
+    // outlineElement.setAttribute('stroke-linejoin', 'round');  // 圆滑的边角
+    svgElement.appendChild(outlineElement);
+  });
+  if (originText && originText.transform.baseVal.numberOfItems > 0) {
+    // 获取源元素和目标元素的transform列表
+    let sourceTransformList = originText.transform.baseVal;
+    const textEl = svgCanvas$7.getElement(id);
+    let textPathTransformList = textEl.transform.baseVal;
+    let textElTransformList = svgElement.transform.baseVal;
+
+    // 清空目标元素的transform列表
+    textPathTransformList.clear();
+    textElTransformList.clear();
+
+    // 遍历源元素的transform，将其复制到目标元素
+    for (let i = 0; i < sourceTransformList.numberOfItems; i++) {
+      let transform = sourceTransformList.getItem(i);
+      if (transform.type === 1) {
+        transform.setTranslate(0, 0);
+      }
+      textPathTransformList.appendItem(transform);
+      textElTransformList.appendItem(transform);
+    }
+  }
 };
 
 /**
@@ -27274,7 +27290,7 @@ const text2Path = (x, y, id, textOptions) => {
 * @param {number} y
 * @param {string} text
 */
-const diyAddText = (x, y, textOptions) => {
+const diyAddText = (originText, x, y, textOptions) => {
   const {
     content,
     fontSize,
@@ -27286,7 +27302,7 @@ const diyAddText = (x, y, textOptions) => {
     attr: {
       x,
       y,
-      id: svgCanvas$7.getNextId(),
+      id: originText ? originText.id : svgCanvas$7.getNextId(),
       fill: svgCanvas$7.getCurText('fill'),
       'stroke-width': svgCanvas$7.getCurText('stroke_width'),
       'font-size': fontSize,
@@ -27298,12 +27314,9 @@ const diyAddText = (x, y, textOptions) => {
     }
   });
   newText.textContent = content;
+  svgCanvas$7.text2Path(x, y, newText.id, textOptions, originText);
   svgCanvas$7.selectOnly([newText]);
   svgCanvas$7.selectorManager.requestSelector(svgCanvas$7.selectedElements[0]).showGrips(true);
-
-  // const tbox = newText.getBBox();
-  svgCanvas$7.text2Path(x, y, newText.id, textOptions);
-
   // 增加文字记录
   svgCanvas$7.addCommandToHistory(new InsertElementCommand$4(newText));
   svgCanvas$7.call('changed', [newText]);
@@ -30827,7 +30840,7 @@ const svgWhiteList_ = {
   marker: ['markerHeight', 'markerUnits', 'markerWidth', 'orient', 'preserveAspectRatio', 'refX', 'refY', 'se_type', 'systemLanguage', 'viewBox'],
   mask: ['height', 'maskContentUnits', 'maskUnits', 'width', 'x', 'y'],
   metadata: [],
-  path: ['clip-path', 'clip-rule', 'd', 'enable-background', 'fill', 'fill-opacity', 'fill-rule', 'filter', 'marker-end', 'marker-mid', 'marker-start', 'mask', 'opacity', 'requiredFeatures', 'stroke', 'stroke-dasharray', 'stroke-dashoffset', 'stroke-linecap', 'stroke-linejoin', 'stroke-miterlimit', 'stroke-opacity', 'stroke-width', 'systemLanguage'],
+  path: ['textType', 'clip-path', 'clip-rule', 'd', 'enable-background', 'fill', 'fill-opacity', 'fill-rule', 'filter', 'marker-end', 'marker-mid', 'marker-start', 'mask', 'opacity', 'requiredFeatures', 'stroke', 'stroke-dasharray', 'stroke-dashoffset', 'stroke-linecap', 'stroke-linejoin', 'stroke-miterlimit', 'stroke-opacity', 'stroke-width', 'systemLanguage'],
   pattern: ['height', 'patternContentUnits', 'patternTransform', 'patternUnits', 'requiredFeatures', 'systemLanguage', 'viewBox', 'width', 'x', 'xlink:href', 'y'],
   polygon: ['clip-path', 'clip-rule', 'fill', 'fill-opacity', 'fill-rule', 'filter', 'marker-end', 'marker-mid', 'marker-start', 'mask', 'opacity', 'points', 'requiredFeatures', 'stroke', 'stroke-dasharray', 'stroke-dashoffset', 'stroke-linecap', 'stroke-linejoin', 'stroke-miterlimit', 'stroke-opacity', 'stroke-width', 'systemLanguage', 'sides', 'shape', 'edge', 'point', 'starRadiusMultiplier', 'r', 'radialshift', 'r2', 'orient', 'cx', 'cy'],
   polyline: ['clip-path', 'clip-rule', 'fill', 'fill-opacity', 'fill-rule', 'filter', 'marker-end', 'marker-mid', 'marker-start', 'mask', 'opacity', 'points', 'requiredFeatures', 'stroke', 'stroke-dasharray', 'stroke-dashoffset', 'stroke-linecap', 'stroke-linejoin', 'stroke-miterlimit', 'stroke-opacity', 'stroke-width', 'systemLanguage', 'se:connector'],
@@ -30838,7 +30851,7 @@ const svgWhiteList_ = {
   svg: ['clip-path', 'clip-rule', 'enable-background', 'filter', 'height', 'mask', 'preserveAspectRatio', 'requiredFeatures', 'systemLanguage', 'version', 'viewBox', 'width', 'x', 'xmlns', 'xmlns:se', 'xmlns:xlink', 'xmlns:oi', 'oi:animations', 'y', 'stroke-linejoin', 'fill-rule', 'aria-label', 'stroke-width', 'fill-rule', 'xml:space'],
   switch: ['requiredFeatures', 'systemLanguage'],
   symbol: ['fill', 'fill-opacity', 'fill-rule', 'filter', 'font-family', 'font-size', 'font-style', 'font-weight', 'opacity', 'overflow', 'preserveAspectRatio', 'requiredFeatures', 'stroke', 'stroke-dasharray', 'stroke-dashoffset', 'stroke-linecap', 'stroke-linejoin', 'stroke-miterlimit', 'stroke-opacity', 'stroke-width', 'systemLanguage', 'viewBox', 'width', 'height'],
-  text: ['clip-path', 'clip-rule', 'fill', 'fill-opacity', 'fill-rule', 'filter', 'font-family', 'font-size', 'font-style', 'font-weight', 'mask', 'opacity', 'requiredFeatures', 'stroke', 'stroke-dasharray', 'stroke-dashoffset', 'stroke-linecap', 'stroke-linejoin', 'stroke-miterlimit', 'stroke-opacity', 'stroke-width', 'systemLanguage', 'text-anchor', 'letter-spacing', 'word-spacing', 'text-decoration', 'textLength', 'lengthAdjust', 'x', 'xml:space', 'y'],
+  text: ['fontType', 'clip-path', 'clip-rule', 'fill', 'fill-opacity', 'fill-rule', 'filter', 'font-family', 'font-size', 'font-style', 'font-weight', 'mask', 'opacity', 'requiredFeatures', 'stroke', 'stroke-dasharray', 'stroke-dashoffset', 'stroke-linecap', 'stroke-linejoin', 'stroke-miterlimit', 'stroke-opacity', 'stroke-width', 'systemLanguage', 'text-anchor', 'letter-spacing', 'word-spacing', 'text-decoration', 'textLength', 'lengthAdjust', 'x', 'xml:space', 'y'],
   textPath: ['method', 'requiredFeatures', 'spacing', 'startOffset', 'systemLanguage', 'xlink:href'],
   title: [],
   tspan: ['clip-path', 'clip-rule', 'dx', 'dy', 'fill', 'fill-opacity', 'fill-rule', 'filter', 'font-family', 'font-size', 'font-style', 'font-weight', 'mask', 'opacity', 'requiredFeatures', 'rotate', 'stroke', 'stroke-dasharray', 'stroke-dashoffset', 'stroke-linecap', 'stroke-linejoin', 'stroke-miterlimit', 'stroke-opacity', 'stroke-width', 'systemLanguage', 'text-anchor', 'textLength', 'x', 'xml:space', 'y'],
@@ -56032,13 +56045,13 @@ const convertGradientsMethod = elem => {
 let svgCanvas$1;
 let selectorManager_; // A Singleton
 // change radius if touch screen
-const gripRadius = window.ontouchstart ? 10 : 8;
+const gripRadius = window.ontouchstart ? 10 : 20;
 const selectButtons = {
   se: {
     cursor: 'pointer',
     icon: 'delete.svg',
     imgBase64: 'data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0idXRmLTgiPz4gICAgICAgICAgICAgICAgPCFET0NUWVBFIHN2ZyBQVUJMSUMgIi0vL1czQy8vRFREIFNWRyAxLjEvL0VOIiAiaHR0cDovL3d3dy53My5vcmcvR3JhcGhpY3MvU1ZHLzEuMS9EVEQvc3ZnMTEuZHRkIj4gICAgICAgICAgICAgICAgPHN2ZyB2ZXJzaW9uPSIxLjEiIGlkPSJUcmFzaEljb24iIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyIgeG1sbnM6eGxpbms9Imh0dHA6Ly93d3cudzMub3JnLzE5OTkveGxpbmsiIHg9IjBweCIgeT0iMHB4IiAgICAgICAgICAgICAgICB3aWR0aD0iMTI3LjU1OXB4IiBoZWlnaHQ9IjEyNy41NTlweCIgdmlld0JveD0iMCAwIDEyNy41NTkgMTI3LjU1OSIgZW5hYmxlLWJhY2tncm91bmQ9Im5ldyAwIDAgMTI3LjU1OSAxMjcuNTU5IiAgICAgICAgICAgICAgICB4bWw6c3BhY2U9InByZXNlcnZlIj4gICAgICAgICAgIDxjaXJjbGUgaWQ9InRyYXNoQmFzZSIgZmlsbD0iI0ZGRkZGRiIgc3Ryb2tlPSIjNjY2IiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1taXRlcmxpbWl0PSIxMCIgY3g9IjYzLjc4MiIgY3k9IjY0LjY5NyIgcj0iNTguNDk3Ii8+ICAgICAgICAgICA8cGF0aCBpZD0idHJhc2giIGZpbGw9IiM2NjYiIGQ9Ik00OS40MzYsMjguOTU5Yy0wLjI1OSwxLjYyMS0wLjQ3MywzLjEzMS0wLjc2NCw0LjYyN2MtMC4wNSwwLjI1NS0wLjM4OSwwLjU1Mi0wLjY1OSwwLjY1ICAgICAgICAgICAgICAgIGMtMS45MTEsMC42OTQtMy44OTMsMS4yMjEtNS43NDQsMi4wNDRjLTEuMjg5LDAuNTc0LTIuNTI2LDEuNDAyLTMuNTczLDIuMzUxYy0xLjgwOCwxLjY0LTEuNzQ5LDMuNjEyLTAuMDIsNS4zNCAgICAgICAgICAgICAgICBjMS41MjUsMS41MjQsMy40NDIsMi40LDUuNDIzLDMuMTM3YzQuNDIyLDEuNjQ0LDkuMDM2LDIuMzgxLDEzLjcwOSwyLjc0NWM3LjA3LDAuNTUsMTQuMTE1LDAuMjkxLDIxLjAyMi0xLjM5NiAgICAgICAgICAgICAgICBjMi42MzYtMC42NDQsNS4xODItMS43MTgsNy42OTMtMi43NzZjMS4wMDgtMC40MjUsMS45MTItMS4yMzksMi42ODQtMi4wNDhjMS40MjEtMS40ODgsMS41MDQtMy4yMzQsMC4wMTEtNC42MyAgICAgICAgICAgICAgICBjLTEuMjY3LTEuMTg0LTIuNzk1LTIuMTY4LTQuMzU4LTIuOTMzYy0xLjYwNC0wLjc4NS0zLjM3Ny0xLjIzOC01LjEwMi0xLjc1MmMtMC42MDYtMC4xOC0wLjgzNy0wLjM4OS0wLjkwMS0xLjA1MiAgICAgICAgICAgICAgICBjLTAuMTM1LTEuMzgyLTAuNDI3LTIuNzQ5LTAuNjY2LTQuMTg1YzAuMDg3LTAuMDA0LDAuMzEtMC4wNjIsMC41MTEtMC4wMTljMy42NjcsMC43OTQsNy4yODYsMS43NjcsMTAuNTE5LDMuNzM5ICAgICAgICAgICAgICAgIGMxLjI3LDAuNzc1LDIuNDc4LDEuNzIzLDMuNTI1LDIuNzc5YzEuNjM5LDEuNjUzLDIuNDQzLDMuNzEzLDIuMzQ4LDYuMDg5Yy0wLjA2LDEuNTAyLDAuMDYxLDMuMDIxLTAuMTE3LDQuNTA3ICAgICAgICAgICAgICAgIGMtMC4yMjEsMS44NDQtMS4yMTQsMy4zNjMtMi40NjksNC43MjFjLTAuMjk1LDAuMzE5LTAuNTcxLDAuNzcyLTAuNjE0LDEuMTg4Yy0wLjk4MSw5LjQwNC0xLjkyOSwxOC44MTItMi44ODMsMjguMjIgICAgICAgICAgICAgICAgYy0wLjQwMSwzLjk1Ni0wLjc2Niw3LjkxNS0xLjIxNSwxMS44NjVjLTAuMjU0LDIuMjMzLTEuNDM5LDMuOTk5LTMuMTI1LDUuNDMyYy0yLjU4OCwyLjIwMS01LjY3NSwzLjM3Ni04LjkyNiw0LjEwOCAgICAgICAgICAgICAgICBjLTkuMjEyLDIuMDc2LTE4LjM2MiwxLjk5Ni0yNy4zNzUtMS4wNjdjLTIuMzk1LTAuODE0LTQuNTc3LTIuMDMyLTYuMzM0LTMuOTExYy0xLjM3NS0xLjQ3MS0yLjEwMy0zLjIwMy0yLjMwMy01LjIxMSAgICAgICAgICAgICAgICBjLTAuODQtOC40NDUtMS43MTUtMTYuODg2LTIuNTc4LTI1LjMyOWMtMC40NzktNC42ODctMC45NS05LjM3NC0xLjQ1OS0xNC4wNTdjLTAuMDQ2LTAuNDItMC4yNjEtMC44OTgtMC41NTItMS4yMDMgICAgICAgICAgICAgICAgYy0xLjc5Ni0xLjg4Mi0yLjc2LTQuMDctMi42NTQtNi42OThjMC4wMjQtMC42MDEsMC4wNDItMS4yMDYsMC0xLjgwNWMtMC4yNTctMy42OTIsMS4zNjUtNi40NTYsNC4yNTYtOC41NjMgICAgICAgICAgICAgICAgQzQwLjU2MiwzMS4wODcsNDQuOTg4LDI5Ljg4NCw0OS40MzYsMjguOTU5eiBNNjYuNDEsNzcuMjA3YzAtNS4yNDYsMC4wMTgtMTAuNDkzLTAuMDI2LTE1LjczOSAgICAgICAgICAgICAgICBjLTAuMDA1LTAuNTgyLTAuMjA0LTEuMzI3LTAuNTk0LTEuNzA3Yy0wLjkyMy0wLjg5OS0yLjEyOC0wLjg2Mi0zLjI4Ny0wLjQ1Yy0xLjA4OCwwLjM4Ni0xLjMyMiwxLjI5My0xLjMyMSwyLjM0MSAgICAgICAgICAgICAgICBjMC4wMDgsMTAuMzU5LDAuMDAyLDIwLjcxOCwwLjAwNywzMS4wNzdjMC4wMDEsMS44LDAuOTk1LDIuODgsMi42MTMsMi44ODZjMS42MTgsMC4wMDYsMi42MDYtMS4wNzMsMi42MDctMi44NjkgICAgICAgICAgICAgICAgQzY2LjQxNCw4Ny41NjYsNjYuNDEyLDgyLjM4Nyw2Ni40MSw3Ny4yMDd6IE03NS43NDUsOTAuNjM5Yy0wLjExMiwwLjkwOS0wLjA2NCwxLjc3NywwLjgzMSwyLjI5MyAgICAgICAgICAgICAgICBjMC45MzUsMC41MzksMS44NzgsMC4zNTUsMi43NTctMC4xNzFjMS4wNTYtMC42MzEsMS41NDMtMS42NDQsMS42OTMtMi44MTdjMC4xNy0xLjMyNCwwLjI4MS0yLjY1NSwwLjQxOS0zLjk4MyAgICAgICAgICAgICAgICBjMC41Ny01LjQ3OCwxLjE0LTEwLjk1NiwxLjcxLTE2LjQzNGMwLjM4My0zLjY4NSwwLjc5MS03LjM2OCwxLjEzNi0xMS4wNTdjMC4xNTUtMS42NjQtMC44MTYtMi40My0yLjQyOS0yLjAzMSAgICAgICAgICAgICAgICBjLTEuNzY3LDAuNDM2LTIuODU5LDEuOTQ5LTMuMDU0LDQuMTE0Yy0wLjI3MSwyLjk5Mi0wLjU3OSw1Ljk4LTAuODg1LDguOTY5Qzc3LjIwMSw3Ni41NjEsNzYuNDcxLDgzLjYsNzUuNzQ1LDkwLjYzOXogICAgICAgICAgICAgICAgTTUyLjAwNyw5MC45MzZjLTAuMTkyLTEuOTAyLTAuMzYzLTMuNjI5LTAuNTQxLTUuMzU2Yy0wLjU3My01LjU3OC0xLjE0Ny0xMS4xNTUtMS43MjMtMTYuNzMyICAgICAgICAgICAgICAgIGMtMC4zMTYtMy4wNTQtMC42MDctNi4xMTEtMC45NzEtOS4xNTljLTAuMTcxLTEuNDMtMS4wMTktMi40NTMtMi4zMjEtMy4wNDljLTEuNjEzLTAuNzM4LTMuMjgtMC4yMTQtMy4wMTUsMi4xMTUgICAgICAgICAgICAgICAgYzAuNjUxLDUuNzAzLDEuMjE4LDExLjQxNiwxLjgxMywxNy4xMjVjMC40ODgsNC42ODEsMC45NTYsOS4zNjMsMS40NTgsMTQuMDQyYzAuMTUzLDEuNDIxLDAuODE4LDIuNTU0LDIuMjAyLDMuMDk4ICAgICAgICAgICAgICAgIEM1MC42MzEsOTMuNjk3LDUyLjMzNCw5Mi43ODIsNTIuMDA3LDkwLjkzNnogTTYzLjc2OCwyNi4yNzVjLTEuNDA0LDAtMi44MDgtMC4wMjUtNC4yMTEsMC4wMDUgICAgICAgICAgICAgICAgYy0zLjkzMSwwLjA4NC03LjAxMywyLjk3MS03LjI1Nyw2Ljg3OGMtMC4xMSwxLjc2NS0wLjA5NywzLjU0NSwwLjAwMiw1LjMxYzAuMDI4LDAuNDk4LDAuNDQ2LDEuMTUzLDAuODc5LDEuNDE0ICAgICAgICAgICAgICAgIGMxLjE4NywwLjcxNSwyLjQ4OCwwLjY3NywzLjczNiwwLjA1MmMwLjY0OS0wLjMyNSwwLjk3MS0wLjg1MywwLjk1NC0xLjYxOWMtMC4wMzQtMS41MDMtMC4wMjktMy4wMDgtMC4wMDgtNC41MTEgICAgICAgICAgICAgICAgYzAuMDE3LTEuMjU2LDAuNjY1LTEuOTIsMS45MjctMS45MzFjMi42NC0wLjAyNCw1LjI4MS0wLjAyNyw3LjkyLTAuMDAzYzEuNDI1LDAuMDEzLDIuMDY1LDAuNjk0LDIuMDc0LDIuMTE5ICAgICAgICAgICAgICAgIGMwLjAwOSwxLjQzNy0wLjAzOSwyLjg3NiwwLjAyNCw0LjMxYzAuMDIsMC40NTUsMC4xOTYsMS4wMTYsMC41MDQsMS4zMjZjMS4wMTQsMS4wMiwzLjUyOCwxLjAxMiw0LjU0Mi0wLjAwMiAgICAgICAgICAgICAgICBjMC4yOTItMC4yOTIsMC40ODUtMC44MDgsMC40OTktMS4yMjljMC4wNTUtMS42MzYsMC4wNS0zLjI3NSwwLjAxLTQuOTEyYy0wLjA4OC0zLjYxMS0yLjcwNS02LjYzOS02LjI5My03LjA2MiAgICAgICAgICAgICAgICBjLTEuNzQ0LTAuMjA2LTMuNTMzLTAuMDM2LTUuMzAyLTAuMDM2QzYzLjc2OCwyNi4zNDgsNjMuNzY4LDI2LjMxMiw2My43NjgsMjYuMjc1eiIvPiAgICAgICAgICAgIDwvc3ZnPg==',
-    size: 20,
+    size: 40,
     name: 'delete'
   }
   // sw: {

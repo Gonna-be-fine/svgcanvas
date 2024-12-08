@@ -17,6 +17,7 @@ import { getParents } from '../common/util.js'
 
 import opentype from './lib/opentype.js';
 import { InsertElementCommand } from './history.js'
+import { getTransformList } from './math.js'
 
 let svgCanvas = null
 
@@ -80,6 +81,9 @@ const deleteElementById = (id) => {
     console.warn('element of this id is not exist');
     return;
   }
+  if(svgCanvas.selectedElements[0] && svgCanvas.selectedElements[0].id === id) {
+    svgCanvas.selectorManager.releaseSelector(svgCanvas.selectedElements[0])
+  }
   el.remove();
   const text = svgCanvas.getElement(id + 'text');
   if(text) {
@@ -132,77 +136,118 @@ const addDiyImage = (url, x, y) => {
   // preventClickDefault(newImage)
 }
 
-const updateDiyText = (id, side, key, value) => {
+const updateDiyText = (id, key, value) => {
   const selected = svgCanvas.getElement(id + 'text')
   if(!selected) {
     throw new Error('cannot find Element')
   }
-  const path = selected.querySelector(`[textType=${side}]`);
-  if(!path) {
-    throw new Error('cannot find element of this type')
+  if(key === 'borders') {
+    for(let i=0; i<value.borders.length; i++) {
+      const path = selected.querySelector(`[textType=${value.borders[i].type}]`);
+      if(!path) {
+        throw new Error('cannot find element of this type')
+      }
+      path.setAttribute('stroke', value.borders[i].color);
+      path.setAttribute('stroke-width', value.borders[i].strokeWidth);
+    }
+  } else {
+    const text = svgCanvas.getElement(id)
+    const box = text.getBBox()
+    selected.remove()
+    text.remove()
+    svgCanvas.diyAddText(text, box.x+box.width/2, box.y+box.height/2, value)
   }
-  path.setAttribute(key, value);
 }
 
-const text2Path = (x, y, id, textOptions) => {
-  const { content, fontSize, borders, fontFile } = textOptions
-  opentype.load(fontFile, function(err, font) {
+const loadFontType = (type, file) => {
+  svgCanvas.fontOption = {
+    type,
+    file
+  }
+  return new Promise((resolve, reject) => {
+    opentype.load(file, (err, font) =>{
       if (err) {
-        console.error('无法加载字体:', err);
-        return;
+        console.error('无法加载字体:', err)
+        reject(null)
       }
+      svgCanvas.fontOption.font = font
+      resolve(font)
+    })
+  })
+}
 
-      // 定义要转换为路径的文字、位置和大小
-      // const fontSize = svgCanvas.getFontSize()-5;
+const text2Path = async (x, y, id, textOptions, originText) => {
+  const { content, fontSize, borders, fontFile, fontType } = textOptions
+  // 获取文字路径
+  if(!svgCanvas.fontOption || svgCanvas.fontOption.type !== fontType) {
+    await loadFontType(fontType, fontFile)
+  }
+  const path = svgCanvas.fontOption.font.getPath(content, x, y, fontSize);
+  // 获取路径的边界框 (bounding box)
+  const bbox = path.getBoundingBox();
+  // 计算宽度
+  const width = bbox.x2 - bbox.x1;
+  // 平移路径，将其 x 移动到 width / 2
+  const translateX = -width / 2 - (bbox.x1 - x);
+  path.commands.forEach(cmd => {
+    if (cmd.x !== undefined) cmd.x += translateX;
+    if (cmd.x1 !== undefined) cmd.x1 += translateX; // 控制点1 (贝塞尔曲线)
+    if (cmd.x2 !== undefined) cmd.x2 += translateX; // 控制点2 (贝塞尔曲线)
+  });
+  const svgPathData = path.toPathData(10); // 转换为 SVG 路径数据
 
-      // 获取文字路径
-      const path = font.getPath(content, x, y, fontSize);
-      const svgPathData = path.toPathData(5); // 转换为 SVG 路径数据
+  // 获取 SVG 容器
+  const svgElement = svgCanvas.addSVGElementsFromJson({
+    element: 'g',
+    curStyles: true,
+    attr: {
+      id: id + 'text',
+      opacity: 1,
+      style: 'pointer-events:none',
+      class: 'noEvent'
+    }
+  })
 
-      // 获取 SVG 容器
-      const svgElement = svgCanvas.addSVGElementsFromJson({
-        element: 'g',
-        curStyles: true,
-        attr: {
-          id: id + 'text',
-          opacity: 1,
-          style: 'pointer-events:none',
-          class: 'noEvent'
+  // 定义每层的颜色和描边宽度
+  const layers = borders || [
+    { type: 'outside', color: '#0044cc', strokeWidth: 16 },  // 最外层的蓝色描边
+    { type: 'middle', color: '#ffee00', strokeWidth: 12 },  // 中间的黄色描边
+    { type: 'inside', color: '#000000', strokeWidth: 6 },  // 最里面的黑色描边
+  ];
+
+  // 逐层绘制描边
+  layers.forEach(layer => {
+    const outlineElement = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    outlineElement.setAttribute('d', svgPathData);
+    outlineElement.setAttribute('textType', layer.type);
+    outlineElement.setAttribute('fill', 'none');
+    outlineElement.setAttribute('stroke', layer.color);
+    outlineElement.setAttribute('stroke-width', layer.strokeWidth);
+    // outlineElement.setAttribute('stroke-linejoin', 'round');  // 圆滑的边角
+    svgElement.appendChild(outlineElement);
+  });
+  if(originText && originText.transform.baseVal.numberOfItems > 0) {
+    // 获取源元素和目标元素的transform列表
+    let sourceTransformList = originText.transform.baseVal;
+    const textEl = svgCanvas.getElement(id)
+
+    let textPathTransformList = textEl.transform.baseVal;
+    let textElTransformList = svgElement.transform.baseVal;
+
+    // 清空目标元素的transform列表
+    textPathTransformList.clear();
+    textElTransformList.clear();
+
+    // 遍历源元素的transform，将其复制到目标元素
+    for (let i = 0; i < sourceTransformList.numberOfItems; i++) {
+        let transform = sourceTransformList.getItem(i);
+        if(transform.type === 1){
+          transform.setTranslate(0, 0);
         }
-      })
-      const _svgElement = svgCanvas.addSVGElementsFromJson({
-        element: 'g',
-        curStyles: true,
-        attr: {
-          opacity: 1,
-          style: 'pointer-events:none',
-          class: 'noEvent',
-        }
-      })
-      svgElement.appendChild(_svgElement)
-
-      // 定义每层的颜色和描边宽度
-      const layers = borders || [
-        { type: 'outside', color: '#0044cc', strokeWidth: 16 },  // 最外层的蓝色描边
-        { type: 'middle', color: '#ffee00', strokeWidth: 12 },  // 中间的黄色描边
-        { type: 'inside', color: '#000000', strokeWidth: 6 },  // 最里面的黑色描边
-      ];
-
-      // 逐层绘制描边
-      layers.forEach(layer => {
-        const outlineElement = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-        outlineElement.setAttribute('d', svgPathData);
-        outlineElement.setAttribute('textType', layer.type);
-        outlineElement.setAttribute('fill', 'none');
-        outlineElement.setAttribute('stroke', layer.color);
-        outlineElement.setAttribute('stroke-width', layer.strokeWidth);
-        outlineElement.setAttribute('stroke-linejoin', 'round');  // 圆滑的边角
-        _svgElement.appendChild(outlineElement);
-      });
-      const textBox = _svgElement.getBBox()
-      const newTranslate = `translate(${-textBox.width/2 - (textBox.x - x)}, 0)`;
-      _svgElement.setAttribute('transform', newTranslate)
-    });
+        textPathTransformList.appendItem(transform);
+        textElTransformList.appendItem(transform);
+    }
+  }
 }
 
 /**
@@ -211,7 +256,7 @@ const text2Path = (x, y, id, textOptions) => {
 * @param {number} y
 * @param {string} text
 */
-const diyAddText = (x, y, textOptions) => {
+const diyAddText = (originText, x, y, textOptions) => {
   const { content, fontSize, fontType } = textOptions
   const newText = svgCanvas.addSVGElementsFromJson({
     element: 'text',
@@ -219,7 +264,7 @@ const diyAddText = (x, y, textOptions) => {
     attr: {
       x,
       y,
-      id: svgCanvas.getNextId(),
+      id: originText ? originText.id : svgCanvas.getNextId(),
       fill: svgCanvas.getCurText('fill'),
       'stroke-width': svgCanvas.getCurText('stroke_width'),
       'font-size': fontSize,
@@ -231,12 +276,11 @@ const diyAddText = (x, y, textOptions) => {
     }
   })
   newText.textContent = content
+  
+  svgCanvas.text2Path(x, y, newText.id, textOptions, originText)
+  
   svgCanvas.selectOnly([newText])
   svgCanvas.selectorManager.requestSelector(svgCanvas.selectedElements[0]).showGrips(true)
-
-  // const tbox = newText.getBBox();
-  svgCanvas.text2Path(x, y, newText.id, textOptions)
-
   // 增加文字记录
   svgCanvas.addCommandToHistory(new InsertElementCommand(newText))
   svgCanvas.call('changed', [newText])
